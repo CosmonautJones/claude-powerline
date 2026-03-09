@@ -40,6 +40,7 @@ export interface DisplayConfig {
   colorCompatibility?: "auto" | "ansi" | "ansi256" | "truecolor";
   autoWrap?: boolean;
   padding?: number;
+  paddingBottom?: number;
 }
 
 export interface BudgetItemConfig {
@@ -62,6 +63,7 @@ export interface PowerlineConfig {
   };
   budget?: BudgetConfig;
   modelContextLimits?: Record<string, number>;
+  symbols?: Record<string, string>;
 }
 
 function isValidTheme(theme: string): theme is PowerlineConfig["theme"] {

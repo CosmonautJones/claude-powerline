@@ -21,6 +21,7 @@ export interface BlockInfo {
   timeRemaining: number | null;
   burnRate: number | null;
   tokenBurnRate: number | null;
+  modelBreakdown: Record<string, number>;
 }
 
 function getModelRateLimitWeight(model: string): number {
@@ -216,6 +217,7 @@ export class BlockProvider {
           timeRemaining: null,
           burnRate: null,
           tokenBurnRate: null,
+          modelBreakdown: {},
         };
       }
 
@@ -285,6 +287,21 @@ export class BlockProvider {
         }
       }
 
+      const modelBreakdown: Record<string, number> = {};
+      for (const entry of entries) {
+        const model = entry.model.toLowerCase();
+        const family = model.includes("opus") ? "opus"
+          : model.includes("sonnet") ? "sonnet"
+          : model.includes("haiku") ? "haiku"
+          : "other";
+        const entryTokens =
+          entry.usage.inputTokens +
+          entry.usage.outputTokens +
+          entry.usage.cacheCreationInputTokens +
+          entry.usage.cacheReadInputTokens;
+        modelBreakdown[family] = (modelBreakdown[family] ?? 0) + entryTokens;
+      }
+
       debug(
         `Block segment: $${totalCost.toFixed(2)}, ${totalTokens} tokens, ${timeRemaining}m remaining, burn rate: ${burnRate ? "$" + burnRate.toFixed(2) + "/hr" : "N/A"}`
       );
@@ -296,6 +313,7 @@ export class BlockProvider {
         timeRemaining,
         burnRate,
         tokenBurnRate,
+        modelBreakdown,
       };
     } catch (error) {
       debug("Error getting active block info:", error);
@@ -306,6 +324,7 @@ export class BlockProvider {
         timeRemaining: null,
         burnRate: null,
         tokenBurnRate: null,
+        modelBreakdown: {},
       };
     }
   }

@@ -7,6 +7,7 @@ import { formatModelName } from "../utils/formatters";
 
 export interface SegmentConfig {
   enabled: boolean;
+  label?: string;
 }
 
 export interface DirectorySegmentConfig extends SegmentConfig {
@@ -45,11 +46,14 @@ export interface MetricsSegmentConfig extends SegmentConfig {
   showMessageCount?: boolean;
   showLinesAdded?: boolean;
   showLinesRemoved?: boolean;
+  showModelBreakdown?: boolean;
 }
 
 export interface BlockSegmentConfig extends SegmentConfig {
   type: "cost" | "tokens" | "both" | "time" | "weighted";
   burnType?: "cost" | "tokens" | "both" | "none";
+  showBar?: boolean;
+  barLength?: number;
 }
 
 export interface TodaySegmentConfig extends SegmentConfig {
@@ -151,6 +155,14 @@ const BAR_STYLES: Record<string, BarStyleDef> = {
   squares:       { filled: "◼", empty: "◻" },
 };
 
+function applyLabel(text: string, label?: string): string {
+  return label ? `${label} ${text}` : text;
+}
+
+function symPrefix(sym: string, text: string): string {
+  return sym ? `${sym} ${text}` : text;
+}
+
 export class SegmentRenderer {
   constructor(
     private readonly config: PowerlineConfig,
@@ -170,7 +182,7 @@ export class SegmentRenderer {
     if (style === "basename") {
       const basename = path.basename(currentDir) || "root";
       return {
-        text: basename,
+        text: applyLabel(basename, config?.label),
         bgColor: colors.modeBg,
         fgColor: colors.modeFg,
       };
@@ -196,7 +208,7 @@ export class SegmentRenderer {
     }
 
     return {
-      text: dirName,
+      text: applyLabel(dirName, config?.label),
       bgColor: colors.modeBg,
       fgColor: colors.modeFg,
     };
@@ -285,18 +297,18 @@ export class SegmentRenderer {
     parts.push(gitStatusIcon);
 
     return {
-      text: parts.join(" "),
+      text: applyLabel(parts.join(" "), config?.label),
       bgColor: colors.gitBg,
       fgColor: colors.gitFg,
     };
   }
 
-  renderModel(hookData: ClaudeHookData, colors: PowerlineColors): SegmentData {
+  renderModel(hookData: ClaudeHookData, colors: PowerlineColors, config?: SegmentConfig): SegmentData {
     const rawName = hookData.model?.display_name || "Claude";
     const modelName = formatModelName(rawName);
 
     return {
-      text: `${this.symbols.model} ${modelName}`,
+      text: applyLabel(symPrefix(this.symbols.model, modelName), config?.label),
       bgColor: colors.modelBg,
       fgColor: colors.modelFg,
     };
@@ -327,7 +339,7 @@ export class SegmentRenderer {
       sessionBudget?.type,
     );
 
-    const text = `${this.symbols.session_cost} ${formattedUsage}`;
+    const text = applyLabel(symPrefix(this.symbols.session_cost, formattedUsage), config?.label);
 
     return {
       text,
@@ -371,13 +383,13 @@ export class SegmentRenderer {
       if (barStyleDef) {
         const emptyBar = barStyleDef.empty.repeat(barLength);
         return {
-          text: `${emptyBar} 0%`,
+          text: applyLabel(`${emptyBar} 0%`, config?.label),
           bgColor: colors.contextBg,
           fgColor: colors.contextFg,
         };
       }
       return {
-        text: `${this.symbols.context_time} 0 (100%)`,
+        text: applyLabel(symPrefix(this.symbols.context_time, "0 used · 100% free"), config?.label),
         bgColor: colors.contextBg,
         fgColor: colors.contextFg,
       };
@@ -400,19 +412,19 @@ export class SegmentRenderer {
       const emptyCount = barLength - filledCount;
       const bar = this.buildBar(barStyleDef, filledCount, emptyCount, barLength);
 
-      const text = config?.showPercentageOnly
+      const rawText = config?.showPercentageOnly
         ? `${bar} ${usedPct}%`
         : `${bar} ${contextInfo.totalTokens.toLocaleString()} (${usedPct}%)`;
 
-      return { text, bgColor, fgColor };
+      return { text: applyLabel(rawText, config?.label), bgColor, fgColor };
     }
 
     const contextLeft = `${contextInfo.contextLeftPercentage}%`;
-    const text = config?.showPercentageOnly
-      ? `${this.symbols.context_time} ${contextLeft}`
-      : `${this.symbols.context_time} ${contextInfo.totalTokens.toLocaleString()} (${contextLeft})`;
+    const rawText = config?.showPercentageOnly
+      ? symPrefix(this.symbols.context_time, `${contextLeft} free`)
+      : symPrefix(this.symbols.context_time, `${contextInfo.totalTokens.toLocaleString()} used · ${contextLeft} free`);
 
-    return { text, bgColor, fgColor };
+    return { text: applyLabel(rawText, config?.label), bgColor, fgColor };
   }
 
   private buildBar(s: BarStyleDef, filledCount: number, emptyCount: number, barLength: number): string {
@@ -440,7 +452,7 @@ export class SegmentRenderer {
   ): SegmentData | null {
     if (!metricsInfo) {
       return {
-        text: `${this.symbols.metrics_response} new`,
+        text: applyLabel(`${this.symbols.metrics_response} new`, (config as SegmentConfig | undefined)?.label),
         bgColor: colors.metricsBg,
         fgColor: colors.metricsFg,
       };
@@ -453,7 +465,7 @@ export class SegmentRenderer {
         metricsInfo.lastResponseTime < 60
           ? `${metricsInfo.lastResponseTime.toFixed(1)}s`
           : `${(metricsInfo.lastResponseTime / 60).toFixed(1)}m`;
-      parts.push(`${this.symbols.metrics_last_response} ${lastResponseTime}`);
+      parts.push(`last: ${lastResponseTime}`);
     }
 
     if (
@@ -464,7 +476,7 @@ export class SegmentRenderer {
         metricsInfo.responseTime < 60
           ? `${metricsInfo.responseTime.toFixed(1)}s`
           : `${(metricsInfo.responseTime / 60).toFixed(1)}m`;
-      parts.push(`${this.symbols.metrics_response} ${responseTime}`);
+      parts.push(`${this.symbols.metrics_response} api: ${responseTime}`);
     }
 
     if (
@@ -472,48 +484,54 @@ export class SegmentRenderer {
       metricsInfo.sessionDuration !== null
     ) {
       const duration = formatDuration(metricsInfo.sessionDuration);
-      parts.push(`${this.symbols.metrics_duration} ${duration}`);
+      parts.push(`elapsed: ${duration}`);
     }
 
     if (
       config?.showMessageCount !== false &&
       metricsInfo.messageCount !== null
     ) {
-      parts.push(
-        `${this.symbols.metrics_messages} ${metricsInfo.messageCount}`,
-      );
+      parts.push(`${metricsInfo.messageCount} msgs`);
     }
 
-    if (
-      config?.showLinesAdded !== false &&
-      metricsInfo.linesAdded !== null &&
-      metricsInfo.linesAdded > 0
-    ) {
-      parts.push(
-        `${this.symbols.metrics_lines_added} ${metricsInfo.linesAdded}`,
-      );
+    const linesAdded = config?.showLinesAdded !== false && metricsInfo.linesAdded !== null && metricsInfo.linesAdded > 0
+      ? metricsInfo.linesAdded : null;
+    const linesRemoved = config?.showLinesRemoved !== false && metricsInfo.linesRemoved !== null && metricsInfo.linesRemoved > 0
+      ? metricsInfo.linesRemoved : null;
+    if (linesAdded !== null || linesRemoved !== null) {
+      const linesParts: string[] = [];
+      if (linesAdded !== null) linesParts.push(`+${linesAdded}`);
+      if (linesRemoved !== null) linesParts.push(`−${linesRemoved}`);
+      parts.push(`${linesParts.join(" ")} lines`);
     }
 
-    if (
-      config?.showLinesRemoved !== false &&
-      metricsInfo.linesRemoved !== null &&
-      metricsInfo.linesRemoved > 0
-    ) {
-      parts.push(
-        `${this.symbols.metrics_lines_removed} ${metricsInfo.linesRemoved}`,
-      );
+    if (config?.showModelBreakdown && _blockInfo && Object.keys(_blockInfo.modelBreakdown).length > 0) {
+      const breakdown = _blockInfo.modelBreakdown;
+      const modelOrder = ["opus", "sonnet", "haiku", "other"];
+      const breakdownParts: string[] = [];
+      for (const family of modelOrder) {
+        if (breakdown[family] && breakdown[family] > 0) {
+          const label = family === "opus" ? "Opus" : family === "sonnet" ? "Sonnet" : family === "haiku" ? "Haiku" : "Other";
+          breakdownParts.push(`${label} ${formatTokens(breakdown[family]).replace(" tokens", "")}`);
+        }
+      }
+      if (breakdownParts.length > 0) {
+        parts.push(`tokens: ${breakdownParts.join(" · ")}`);
+      }
     }
+
+    const metricsLabel = (config as SegmentConfig | undefined)?.label;
 
     if (parts.length === 0) {
       return {
-        text: `${this.symbols.metrics_response} active`,
+        text: applyLabel(`${this.symbols.metrics_response} active`, metricsLabel),
         bgColor: colors.metricsBg,
         fgColor: colors.metricsFg,
       };
     }
 
     return {
-      text: parts.join(" "),
+      text: applyLabel(parts.join(" "), metricsLabel),
       bgColor: colors.metricsBg,
       fgColor: colors.metricsFg,
     };
@@ -576,9 +594,15 @@ export class SegmentRenderer {
               rateLimit,
               blockBudget?.warningThreshold || 80,
             );
-            mainContent = `${weightedDisplay}${rateLimitStatus.displayText}`;
+            const pctUsed = rateLimitStatus.percentage !== null
+              ? `${rateLimitStatus.percentage.toFixed(0)}%`
+              : null;
+            const usedNum = weightedDisplay.replace(" tokens", "");
+            mainContent = pctUsed
+              ? `${usedNum} / ${formatTokens(rateLimit)} used (${pctUsed})`
+              : `${weightedDisplay} used`;
           } else {
-            mainContent = `${weightedDisplay} (weighted)`;
+            mainContent = `${weightedDisplay} used (weighted)`;
           }
           break;
         case "both":
@@ -617,14 +641,14 @@ export class SegmentRenderer {
                   ? `${(blockInfo.burnRate * 100).toFixed(0)}¢/h`
                   : `$${blockInfo.burnRate.toFixed(2)}/h`
                 : "N/A";
-            burnContent = ` | ${costBurnRate}`;
+            burnContent = ` · burn: ${costBurnRate}`;
             break;
           case "tokens":
             const tokenBurnRate =
               blockInfo.tokenBurnRate !== null
                 ? `${formatTokens(Math.round(blockInfo.tokenBurnRate))}/h`
                 : "N/A";
-            burnContent = ` | ${tokenBurnRate}`;
+            burnContent = ` · burn: ${tokenBurnRate}`;
             break;
           case "both":
             const costBurn =
@@ -637,7 +661,7 @@ export class SegmentRenderer {
               blockInfo.tokenBurnRate !== null
                 ? `${formatTokens(Math.round(blockInfo.tokenBurnRate))}/h`
                 : "N/A";
-            burnContent = ` | ${costBurn} / ${tokenBurn}`;
+            burnContent = ` · burn: ${costBurn} / ${tokenBurn}`;
             break;
         }
       }
@@ -646,13 +670,52 @@ export class SegmentRenderer {
         displayText = mainContent;
       } else {
         displayText = timeStr
-          ? `${mainContent}${burnContent} (${timeStr} left)`
+          ? `${mainContent}${burnContent} · resets in ${timeStr}`
           : `${mainContent}${burnContent}`;
       }
     }
 
+    if (config?.showBar) {
+      const blockBudget = this.config.budget?.block;
+      const barLen = config.barLength ?? 12;
+      let barText = "";
+
+      if (blockBudget?.amount && blockBudget.amount > 0) {
+        const used = blockBudget.type === "tokens"
+          ? (blockInfo.weightedTokens ?? blockInfo.tokens ?? 0)
+          : (blockInfo.cost ?? 0);
+        const rawPct = Math.round((used / blockBudget.amount) * 100);
+        const pct = Math.min(100, rawPct);
+        const filled = rawPct >= 100 ? barLen : Math.round((rawPct / 100) * barLen);
+        const bar = this.buildBar(
+          { filled: this.symbols.bar_filled, empty: this.symbols.bar_empty },
+          filled,
+          barLen - filled,
+          barLen,
+        );
+        const timeStr2 = blockInfo.timeRemaining !== null
+          ? (() => {
+              const h = Math.floor((blockInfo.timeRemaining) / 60);
+              const m = blockInfo.timeRemaining % 60;
+              return h > 0 ? `${h}h ${m}m` : `${m}m`;
+            })()
+          : null;
+        barText = timeStr2
+          ? `${bar} ${pct}% · resets ${timeStr2}`
+          : `${bar} ${pct}%`;
+      } else {
+        barText = displayText;
+      }
+
+      return {
+        text: applyLabel(barText, config?.label),
+        bgColor: colors.blockBg,
+        fgColor: colors.blockFg,
+      };
+    }
+
     return {
-      text: `${this.symbols.block_cost} ${displayText}`,
+      text: applyLabel(symPrefix(this.symbols.block_cost, displayText), config?.label),
       bgColor: colors.blockBg,
       fgColor: colors.blockFg,
     };
@@ -662,9 +725,10 @@ export class SegmentRenderer {
     todayInfo: TodayInfo,
     colors: PowerlineColors,
     type = "cost",
+    config?: TodaySegmentConfig,
   ): SegmentData {
     const todayBudget = this.config.budget?.today;
-    const text = `${this.symbols.today_cost} ${this.formatUsageWithBudget(
+    const rawText = symPrefix(this.symbols.today_cost, this.formatUsageWithBudget(
       todayInfo.cost,
       todayInfo.tokens,
       todayInfo.tokenBreakdown,
@@ -672,10 +736,10 @@ export class SegmentRenderer {
       todayBudget?.amount,
       todayBudget?.warningThreshold,
       todayBudget?.type,
-    )}`;
+    ));
 
     return {
-      text,
+      text: applyLabel(rawText, config?.label),
       bgColor: colors.todayBg,
       fgColor: colors.todayFg,
     };
@@ -781,7 +845,7 @@ export class SegmentRenderer {
     }
 
     return {
-      text: `${this.symbols.version} v${hookData.version}`,
+      text: applyLabel(symPrefix(this.symbols.version, `v${hookData.version}`), _config?.label),
       bgColor: colors.versionBg,
       fgColor: colors.versionFg,
     };

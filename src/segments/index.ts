@@ -12,6 +12,7 @@ export { MetricsProvider, MetricsInfo } from "./metrics";
 export {
   SegmentRenderer,
   PowerlineSymbols,
+  SegmentConfig,
   AnySegmentConfig,
   DirectorySegmentConfig,
   GitSegmentConfig,

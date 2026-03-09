@@ -20,6 +20,7 @@ import {
   MetricsInfo,
   SegmentRenderer,
   PowerlineSymbols,
+  SegmentConfig,
   AnySegmentConfig,
   DirectorySegmentConfig,
   GitSegmentConfig,
@@ -141,8 +142,10 @@ export class PowerlineRenderer {
       ? await this.metricsProvider.getMetricsInfo(hookData.session_id, hookData)
       : null;
 
+    const paddingBottom = "\n".repeat(this.config.display.paddingBottom ?? 0);
+
     if (this.config.display.autoWrap) {
-      return this.generateAutoWrapStatusline(
+      const result = await this.generateAutoWrapStatusline(
         hookData,
         usageInfo,
         blockInfo,
@@ -150,6 +153,7 @@ export class PowerlineRenderer {
         contextInfo,
         metricsInfo
       );
+      return result + paddingBottom;
     }
 
     const lines = await Promise.all(
@@ -166,7 +170,7 @@ export class PowerlineRenderer {
       )
     );
 
-    return lines.filter((line) => line.length > 0).join("\n");
+    return lines.filter((line) => line.length > 0).join("\n") + paddingBottom;
   }
 
   private async generateAutoWrapStatusline(
@@ -355,7 +359,7 @@ export class PowerlineRenderer {
       );
     }
     if (segment.type === "model") {
-      return this.segmentRenderer.renderModel(hookData, colors);
+      return this.segmentRenderer.renderModel(hookData, colors, segment.config as SegmentConfig);
     }
 
     if (segment.type === "git") {
@@ -509,7 +513,7 @@ export class PowerlineRenderer {
   ) {
     if (!todayInfo) return null;
     const todayType = config?.type || "cost";
-    return this.segmentRenderer.renderToday(todayInfo, colors, todayType);
+    return this.segmentRenderer.renderToday(todayInfo, colors, todayType, config);
   }
 
   private renderVersionSegment(
@@ -526,38 +530,42 @@ export class PowerlineRenderer {
     const isMinimalStyle = style === "minimal";
     const isCapsuleStyle = style === "capsule";
     const symbolSet = charset === "text" ? TEXT_SYMBOLS : SYMBOLS;
+    const overrides = this.config.symbols || {};
+
+    const s = (key: keyof typeof SYMBOLS): string =>
+      overrides[key] !== undefined ? overrides[key] : symbolSet[key];
 
     return {
       right: isMinimalStyle ? "" : (isCapsuleStyle ? symbolSet.right_rounded : symbolSet.right),
       left: isCapsuleStyle ? symbolSet.left_rounded : "",
-      branch: symbolSet.branch,
-      model: symbolSet.model,
-      git_clean: symbolSet.git_clean,
-      git_dirty: symbolSet.git_dirty,
-      git_conflicts: symbolSet.git_conflicts,
-      git_ahead: symbolSet.git_ahead,
-      git_behind: symbolSet.git_behind,
-      git_worktree: symbolSet.git_worktree,
-      git_tag: symbolSet.git_tag,
-      git_sha: symbolSet.git_sha,
-      git_upstream: symbolSet.git_upstream,
-      git_stash: symbolSet.git_stash,
-      git_time: symbolSet.git_time,
-      session_cost: symbolSet.session_cost,
-      block_cost: symbolSet.block_cost,
-      today_cost: symbolSet.today_cost,
-      context_time: symbolSet.context_time,
-      metrics_response: symbolSet.metrics_response,
-      metrics_last_response: symbolSet.metrics_last_response,
-      metrics_duration: symbolSet.metrics_duration,
-      metrics_messages: symbolSet.metrics_messages,
-      metrics_lines_added: symbolSet.metrics_lines_added,
-      metrics_lines_removed: symbolSet.metrics_lines_removed,
-      metrics_burn: symbolSet.metrics_burn,
-      version: symbolSet.version,
-      bar_filled: symbolSet.bar_filled,
-      bar_empty: symbolSet.bar_empty,
-      env: symbolSet.env,
+      branch: s("branch"),
+      model: s("model"),
+      git_clean: s("git_clean"),
+      git_dirty: s("git_dirty"),
+      git_conflicts: s("git_conflicts"),
+      git_ahead: s("git_ahead"),
+      git_behind: s("git_behind"),
+      git_worktree: s("git_worktree"),
+      git_tag: s("git_tag"),
+      git_sha: s("git_sha"),
+      git_upstream: s("git_upstream"),
+      git_stash: s("git_stash"),
+      git_time: s("git_time"),
+      session_cost: s("session_cost"),
+      block_cost: s("block_cost"),
+      today_cost: s("today_cost"),
+      context_time: s("context_time"),
+      metrics_response: s("metrics_response"),
+      metrics_last_response: s("metrics_last_response"),
+      metrics_duration: s("metrics_duration"),
+      metrics_messages: s("metrics_messages"),
+      metrics_lines_added: s("metrics_lines_added"),
+      metrics_lines_removed: s("metrics_lines_removed"),
+      metrics_burn: s("metrics_burn"),
+      version: s("version"),
+      bar_filled: s("bar_filled"),
+      bar_empty: s("bar_empty"),
+      env: s("env"),
     };
   }
 
