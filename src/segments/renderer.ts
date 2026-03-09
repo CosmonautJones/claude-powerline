@@ -37,6 +37,7 @@ export interface TmuxSegmentConfig extends SegmentConfig {}
 export interface ContextSegmentConfig extends SegmentConfig {
   showPercentageOnly?: boolean;
   displayStyle?: "text" | "ball" | "bar" | "blocks" | "blocks-line" | "capped" | "dots" | "filled" | "geometric" | "line" | "squares";
+  showCompactEstimate?: boolean;
 }
 
 export interface MetricsSegmentConfig extends SegmentConfig {
@@ -371,6 +372,7 @@ export class SegmentRenderer {
     contextInfo: ContextInfo | null,
     colors: PowerlineColors,
     config?: ContextSegmentConfig,
+    messageCount?: number | null,
   ): SegmentData | null {
     const barLength = 10;
     const style = config?.displayStyle ?? "text";
@@ -420,9 +422,22 @@ export class SegmentRenderer {
     }
 
     const contextLeft = `${contextInfo.contextLeftPercentage}%`;
+
+    let compactNote = "";
+    if (config?.showCompactEstimate) {
+      const tokensLeft = contextInfo.usableTokens - contextInfo.totalTokens;
+      if (tokensLeft <= 0) {
+        compactNote = " · compact due";
+      } else if (messageCount && messageCount > 0 && contextInfo.totalTokens > 0) {
+        const tokensPerMsg = contextInfo.totalTokens / messageCount;
+        const msgsLeft = Math.round(tokensLeft / tokensPerMsg);
+        compactNote = ` · ~${msgsLeft} msgs to compact`;
+      }
+    }
+
     const rawText = config?.showPercentageOnly
-      ? symPrefix(this.symbols.context_time, `${contextLeft} free`)
-      : symPrefix(this.symbols.context_time, `${contextInfo.totalTokens.toLocaleString()} used · ${contextLeft} free`);
+      ? symPrefix(this.symbols.context_time, `${contextLeft} free${compactNote}`)
+      : symPrefix(this.symbols.context_time, `${contextInfo.totalTokens.toLocaleString()} used · ${contextLeft} free${compactNote}`);
 
     return { text: applyLabel(rawText, config?.label), bgColor, fgColor };
   }

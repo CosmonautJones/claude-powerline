@@ -387,7 +387,8 @@ export class PowerlineRenderer {
       return this.renderContextSegment(
         segment.config as ContextSegmentConfig,
         contextInfo,
-        colors
+        colors,
+        metricsInfo
       );
     }
 
@@ -477,10 +478,11 @@ export class PowerlineRenderer {
   private renderContextSegment(
     config: ContextSegmentConfig,
     contextInfo: ContextInfo | null,
-    colors: PowerlineColors
+    colors: PowerlineColors,
+    metricsInfo: MetricsInfo | null
   ) {
     if (!this.needsSegmentInfo("context")) return null;
-    return this.segmentRenderer.renderContext(contextInfo, colors, config);
+    return this.segmentRenderer.renderContext(contextInfo, colors, config, metricsInfo?.messageCount);
   }
 
   private renderMetricsSegment(
